@@ -78,6 +78,8 @@ function BookingWizardContent() {
   // Time slot state
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [isBookingSubmitted, setIsBookingSubmitted] = useState(false);
+  const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Preselect branch from URL query
   useEffect(() => {
@@ -92,17 +94,28 @@ function BookingWizardContent() {
 
   // Calculate time slots when date/service changes
   useEffect(() => {
-    if (selectedDate && selectedService && selectedBranch) {
-      // dynamically import to avoid SSR issues with localStorage
-      import('@/lib/booking-store').then(({ getBookingsByBranchAndDate }) => {
-        const existingBookings = getBookingsByBranchAndDate(selectedBranch.id, selectedDate);
-        const slots = getAvailableTimeSlots(
-          existingBookings,
-          selectedService.durationMinutes
-        );
-        setTimeSlots(slots);
-      });
+    async function fetchAndCalculateSlots() {
+      if (selectedDate && selectedService && selectedBranch) {
+        setIsLoadingSlots(true);
+        try {
+          const { getBookingsByBranchAndDate } = await import('@/lib/firebase');
+          const existingBookings = await getBookingsByBranchAndDate(selectedBranch.id, selectedDate);
+          const slots = getAvailableTimeSlots(
+            existingBookings,
+            selectedService.durationMinutes
+          );
+          setTimeSlots(slots);
+        } catch (error) {
+          console.error('Error fetching bookings from Firebase:', error);
+          // Fallback to all slots available if Firebase fails
+          const slots = getAvailableTimeSlots([], selectedService.durationMinutes);
+          setTimeSlots(slots);
+        } finally {
+          setIsLoadingSlots(false);
+        }
+      }
     }
+    fetchAndCalculateSlots();
   }, [selectedDate, selectedService, selectedBranch]);
 
   const goNext = useCallback(() => {
@@ -118,9 +131,10 @@ function BookingWizardContent() {
   const handleSubmitBooking = useCallback(async () => {
     if (!selectedBranch || !selectedService || !selectedDate || !selectedTime) return;
 
+    setIsSubmitting(true);
     const endTime = calculateEndTime(selectedTime, selectedService.durationMinutes);
 
-    // Save to localStorage
+    // Save to Firebase
     const bookingData = {
       customerName,
       customerPhone,
@@ -137,11 +151,17 @@ function BookingWizardContent() {
       status: 'pending' as const,
     };
 
-    const { saveBooking } = await import('@/lib/booking-store');
-    const savedBooking = saveBooking(bookingData);
-    console.log('Booking submitted and saved locally:', savedBooking);
-
-    setIsBookingSubmitted(true);
+    try {
+      const { createBooking } = await import('@/lib/firebase');
+      const bookingId = await createBooking(bookingData);
+      console.log('Booking submitted and saved to Firebase with ID:', bookingId);
+      setIsBookingSubmitted(true);
+    } catch (error) {
+      console.error('Error saving booking to Firebase:', error);
+      alert('Maaf, terjadi kesalahan saat menyimpan booking. Silakan coba lagi.');
+    } finally {
+      setIsSubmitting(false);
+    }
   }, [
     selectedBranch,
     selectedService,

@@ -652,10 +652,24 @@ function BookingWizardContent() {
 
             <button
               onClick={handleSubmitBooking}
-              className="w-full bg-gradient-gold text-white py-4 rounded-2xl text-lg font-bold hover:shadow-gold transition-all duration-300 hover:scale-[1.02] flex items-center justify-center gap-3"
+              disabled={isSubmitting}
+              className={`w-full text-white py-4 rounded-2xl text-lg font-bold transition-all duration-300 flex items-center justify-center gap-3 ${
+                isSubmitting 
+                  ? 'bg-brown-300 cursor-not-allowed' 
+                  : 'bg-gradient-gold hover:shadow-gold hover:scale-[1.02]'
+              }`}
             >
-              <Check className="w-6 h-6" />
-              Konfirmasi Booking
+              {isSubmitting ? (
+                <>
+                  <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Memproses Booking...
+                </>
+              ) : (
+                <>
+                  <Check className="w-6 h-6" />
+                  Konfirmasi Booking
+                </>
+              )}
             </button>
           </div>
         );

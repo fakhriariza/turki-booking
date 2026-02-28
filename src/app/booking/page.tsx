@@ -93,14 +93,15 @@ function BookingWizardContent() {
   // Calculate time slots when date/service changes
   useEffect(() => {
     if (selectedDate && selectedService && selectedBranch) {
-      // In production, this would fetch from Firestore
-      // For now, simulate with empty bookings (all slots available)
-      const mockExistingBookings: Booking[] = [];
-      const slots = getAvailableTimeSlots(
-        mockExistingBookings,
-        selectedService.durationMinutes
-      );
-      setTimeSlots(slots);
+      // dynamically import to avoid SSR issues with localStorage
+      import('@/lib/booking-store').then(({ getBookingsByBranchAndDate }) => {
+        const existingBookings = getBookingsByBranchAndDate(selectedBranch.id, selectedDate);
+        const slots = getAvailableTimeSlots(
+          existingBookings,
+          selectedService.durationMinutes
+        );
+        setTimeSlots(slots);
+      });
     }
   }, [selectedDate, selectedService, selectedBranch]);
 
@@ -114,12 +115,12 @@ function BookingWizardContent() {
     setCurrentStep((prev) => Math.max(prev - 1, 1));
   }, []);
 
-  const handleSubmitBooking = useCallback(() => {
+  const handleSubmitBooking = useCallback(async () => {
     if (!selectedBranch || !selectedService || !selectedDate || !selectedTime) return;
 
     const endTime = calculateEndTime(selectedTime, selectedService.durationMinutes);
 
-    // In production, this would save to Firestore via createBooking()
+    // Save to localStorage
     const bookingData = {
       customerName,
       customerPhone,
@@ -136,9 +137,20 @@ function BookingWizardContent() {
       status: 'pending' as const,
     };
 
-    console.log('Booking submitted:', bookingData);
+    const { saveBooking } = await import('@/lib/booking-store');
+    const savedBooking = saveBooking(bookingData);
+    console.log('Booking submitted and saved locally:', savedBooking);
+
     setIsBookingSubmitted(true);
-  }, [selectedBranch, selectedService, selectedDate, selectedTime, customerName, customerPhone, customerNotes]);
+  }, [
+    selectedBranch,
+    selectedService,
+    selectedDate,
+    selectedTime,
+    customerName,
+    customerPhone,
+    customerNotes,
+  ]);
 
   const handleWhatsAppRedirect = useCallback(() => {
     if (!selectedBranch || !selectedService) return;
